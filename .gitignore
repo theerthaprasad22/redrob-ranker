@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+!.env.example
+
+# Data (don't commit the large pool; ship the small samples in sample_data/)
+candidates.jsonl
+candidates.jsonl.gz
+candidates_full.jsonl
+*.jsonl.gz
+
+# Local outputs / scratch
+role_spec_suggestions.yaml
+.DS_Store
+.ipynb_checkpoints/
+
+# Keep: submission.csv (the ranked output deliverable), sample_data/*, config/*

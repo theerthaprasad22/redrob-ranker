@@ -1,0 +1,22 @@
+# Core dependencies for the ranking step (rank.py).
+# Deliberately minimal so Stage-3 reproduction is fast and reliable.
+numpy>=1.24
+scipy>=1.10
+scikit-learn>=1.3
+PyYAML>=6.0
+
+# ---------------------------------------------------------------------------
+# OPTIONAL extras (NOT required to produce a submission):
+#
+#   Higher-quality semantic encoder (`--encoder st`):
+#     pip install sentence-transformers
+#     # then pre-download the model once (see precompute.py); the ranking step
+#     # itself runs offline from the local cache.
+#
+#   Sandbox / demo UI (app/streamlit_app.py):
+#     pip install streamlit
+#
+#   Free LLM reasoning polish (`--reasoning-llm`) needs no extra pip packages
+#   (uses the standard library); just set LLM_PROVIDER and the relevant key,
+#   or run a local Ollama server.
+# ---------------------------------------------------------------------------

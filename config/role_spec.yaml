@@ -1,0 +1,190 @@
+# =============================================================================
+# RoleSpec — structured understanding of the job description.
+#
+# The JD (job_description.docx) is a fixed, known document for this challenge.
+# Rather than re-parse free text at ranking time (which would be slow and
+# fragile), we distill it ONCE into this structured spec. `precompute.py` can
+# regenerate / augment this file using a free LLM (Ollama / Gemini / Groq) — see
+# README — but the file is hand-validated so the ranker works with NO LLM and
+# NO network, satisfying the compute constraints.
+#
+# Every weight / list here is traceable to a specific line in the JD. The
+# "Final note for participants" makes the intent explicit:
+#   * NOT "most AI keywords"  -> keyword stuffers are a trap.
+#   * Reason about the gap between what the JD SAYS and what it MEANS.
+#   * A Tier-5 candidate may never write "RAG"/"Pinecone" but their career shows
+#     they built a recommendation system at a product company -> strong fit.
+#   * AI keywords + title "Marketing Manager" -> NOT a fit.
+#   * Down-weight perfect-on-paper-but-unavailable candidates (stale, low
+#     response rate).
+# =============================================================================
+
+role:
+  title: "Senior AI Engineer — Founding Team"
+  company: "Redrob AI (Series A talent-intelligence platform)"
+  seniority: "senior"
+
+# ---- Experience band (JD: "5-9 years", ideal "6-8") -------------------------
+experience:
+  min_years: 5
+  max_years: 9
+  ideal_low: 6
+  ideal_high: 8
+  # Soft floor/ceiling: candidates outside the band are considered if other
+  # signals are strong (JD says so explicitly), but penalised gradually.
+  soft_floor: 3
+  soft_ceiling: 13
+
+# ---- Location (JD: Pune/Noida preferred; Indian Tier-1 welcome) -------------
+location:
+  best: ["pune", "noida"]
+  good: ["hyderabad", "mumbai", "delhi", "new delhi", "gurgaon", "gurugram",
+         "bengaluru", "bangalore", "ncr", "navi mumbai", "ghaziabad", "faridabad"]
+  ok_country: ["india"]
+  # Outside India: case-by-case, no visa sponsorship -> low location fit.
+
+# ---- "Things you absolutely need" (JD) -> must-have concepts -----------------
+# We match these SEMANTICALLY and via career evidence, not just skill strings.
+# Each concept carries synonyms so plain-language profiles still match.
+must_have_concepts:
+  embeddings_retrieval:
+    weight: 1.0
+    terms: ["embedding", "embeddings", "sentence-transformers", "sentence transformers",
+            "semantic search", "dense retrieval", "vector search", "bge", "e5",
+            "openai embeddings", "text embedding", "nearest neighbor", "ann",
+            "retrieval", "rag", "retrieval augmented"]
+  vector_db_hybrid_search:
+    weight: 1.0
+    terms: ["vector database", "vector db", "pinecone", "weaviate", "qdrant",
+            "milvus", "faiss", "opensearch", "elasticsearch", "elastic search",
+            "hybrid search", "bm25", "inverted index", "lucene", "solr"]
+  ranking_search_recsys:
+    weight: 1.0
+    terms: ["ranking", "ranker", "learning to rank", "ltr", "recommendation",
+            "recommender", "recsys", "personalization", "personalisation",
+            "search relevance", "matching", "candidate generation", "retrieval and ranking"]
+  python:
+    weight: 0.7
+    terms: ["python"]
+  ranking_evaluation:
+    weight: 0.9
+    terms: ["ndcg", "mrr", "map", "mean average precision", "precision@k",
+            "recall@k", "offline evaluation", "a/b test", "ab test", "a/b testing",
+            "ab testing", "evaluation framework", "offline-to-online", "ranking metrics"]
+
+# ---- "Things we'd like" (JD) -> nice-to-have concepts (boost, never reject) --
+nice_to_have_concepts:
+  llm_finetuning:
+    weight: 0.5
+    terms: ["lora", "qlora", "peft", "fine-tuning", "fine tuning", "finetuning",
+            "instruction tuning", "sft", "rlhf"]
+  learning_to_rank_models:
+    weight: 0.5
+    terms: ["xgboost", "lightgbm", "gradient boosted", "lambdamart", "learning to rank",
+            "neural ranking", "catboost"]
+  hrtech_marketplace:
+    weight: 0.4
+    terms: ["hr-tech", "hrtech", "recruiting", "recruitment", "talent", "ats",
+            "marketplace", "two-sided marketplace", "job matching"]
+  distributed_inference:
+    weight: 0.35
+    terms: ["distributed systems", "large-scale", "low-latency inference",
+            "inference optimization", "model serving", "triton", "onnx", "quantization"]
+  open_source:
+    weight: 0.35
+    terms: ["open source", "open-source", "oss", "maintainer", "contributor",
+            "github stars", "pull request"]
+
+# ---- Domain orientation (JD: NLP/IR wanted; CV/speech/robotics-only not) -----
+domain:
+  positive_terms: ["nlp", "natural language", "information retrieval", "ir",
+                    "search", "ranking", "recommendation", "embeddings", "llm",
+                    "language model", "text", "semantic"]
+  # Negative ONLY when these dominate AND NLP/IR is absent (handled in scoring).
+  negative_terms: ["computer vision", "image classification", "object detection",
+                   "segmentation", "speech recognition", "asr", "text-to-speech",
+                   "tts", "robotics", "slam", "autonomous", "lidar", "point cloud"]
+
+# ---- "Things we explicitly do NOT want" (JD) -> disqualifier signals ---------
+# Applied as graduated multiplicative penalties (floored, never a hard 0 unless
+# the integrity check fires). Each is traceable to the JD's "do NOT want" list.
+disqualifiers:
+  # Career entirely at IT-services / consulting firms (unless prior product co).
+  services_only:
+    penalty: 0.45          # multiply base_fit when career is services-only
+    companies: ["tcs", "tata consultancy", "infosys", "wipro", "accenture",
+                "cognizant", "capgemini", "tech mahindra", "hcl", "hcltech",
+                "ltimindtree", "lti", "mindtree", "mphasis", "dxc", "ibm services",
+                "deloitte", "genpact"]
+    services_industries: ["it services", "consulting", "outsourcing", "bpo",
+                           "staffing", "information technology & services"]
+  # Pure research / academia with no production deployment.
+  research_only:
+    penalty: 0.55
+    terms: ["phd researcher", "research scientist", "research assistant",
+            "postdoc", "post-doc", "professor", "lecturer", "university",
+            "research lab", "academia", "academic"]
+    production_terms: ["production", "deployed", "shipped", "launched", "users",
+                       "real users", "in production", "serving"]
+  # "AI experience" = only recent (<12mo) LangChain-calling-OpenAI, no prior ML.
+  framework_only_recent:
+    penalty: 0.6
+    framework_terms: ["langchain", "llamaindex", "llama-index", "auto-gpt",
+                      "autogen", "openai api", "prompt engineering", "wrapper"]
+    legacy_ml_terms: ["machine learning", "ml model", "scikit", "tensorflow",
+                      "pytorch", "xgboost", "recommendation", "ranking", "nlp",
+                      "deep learning", "feature engineering"]
+  # Title-chaser: many short stints optimising for title.
+  title_chaser:
+    penalty: 0.7
+    max_avg_tenure_months: 19    # avg tenure below this across >=3 jobs -> flag
+    min_jobs_for_flag: 3
+  # CV/speech/robotics primary without NLP/IR (uses domain.negative_terms).
+  wrong_domain:
+    penalty: 0.55
+
+# ---- Positive career evidence (JD "ideal candidate" + "what you'd be doing") -
+career_evidence:
+  # Shipped end-to-end ranking/search/recsys at a product company == the dream.
+  shipped_systems_terms: ["built", "shipped", "launched", "deployed", "designed",
+                          "led", "owned", "architected", "scaled", "production"]
+  product_signal_terms: ["product", "saas", "platform", "consumer", "b2c", "b2b",
+                         "startup", "scale", "millions", "users", "real-time"]
+  # Roles that signal genuine applied-ML / engineering work.
+  positive_titles: ["ai engineer", "machine learning engineer", "ml engineer",
+                    "applied scientist", "applied ml", "research engineer",
+                    "data scientist", "nlp engineer", "search engineer",
+                    "software engineer", "sde", "backend engineer", "platform engineer",
+                    "staff engineer", "principal engineer", "ml scientist",
+                    "deep learning engineer", "computer scientist"]
+  # Titles that, combined with AI skills, scream "keyword stuffer" (JD example:
+  # all AI keywords but title "Marketing Manager"). Strong title-mismatch flag.
+  offrole_titles: ["marketing", "sales", "hr ", "human resresource", "human resource",
+                  "recruiter", "accountant", "finance", "civil engineer",
+                  "mechanical engineer", "electrical engineer", "content writer",
+                  "graphic designer", "business analyst", "project manager",
+                  "operations", "customer success", "teacher", "nurse", "doctor",
+                  "lawyer", "architect ", "chef", "administrator", "executive assistant"]
+
+# ---- Scoring weights for base_fit (sum ~= 1.0) ------------------------------
+# Reflect JD priority: career/role evidence and semantic understanding dominate;
+# raw skill-list overlap is intentionally NOT the largest term (anti-keyword).
+weights:
+  semantic_fit:      0.20   # embedding similarity of candidate vs role meaning
+  role_title_fit:    0.18   # is the person actually in an applied-ML/eng role
+  career_evidence:   0.22   # shipped ranking/search/recsys at product company
+  skills_trust:      0.16   # skill overlap WEIGHTED by proficiency/endorse/assess
+  experience_fit:    0.12   # years in band + applied-ML years
+  domain_fit:        0.07   # NLP/IR vs CV/speech/robotics
+  location_fit:      0.04   # Noida/Pune/India
+  education_fit:     0.01   # minor
+
+# ---- Behavioral-signal modifier bounds (applied multiplicatively) -----------
+# JD: "a perfect-on-paper candidate who hasn't logged in for 6 months and has a
+# 5% response rate is, for hiring purposes, not actually available."
+behavioral:
+  modifier_min: 0.60
+  modifier_max: 1.15
+  stale_days: 120          # last_active older than this -> availability penalty
+  good_response_rate: 0.5
+  good_notice_days: 30

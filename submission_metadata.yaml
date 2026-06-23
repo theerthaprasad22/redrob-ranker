@@ -1,0 +1,85 @@
+# Redrob Hackathon — Submission Metadata
+# Mirror of the portal metadata. EDIT the identity / repo / sandbox fields
+# (marked TODO) before submitting; the technical fields already describe this build.
+
+# ============================================================================
+# Team identity   --  TODO: fill in
+# ============================================================================
+team_name: "TODO-your-team-name"
+
+primary_contact:
+  name: "TODO Full Name"
+  email: "TODO@example.com"
+  phone: "+91-XXXXXXXXXX"
+
+team_members:
+  - name: "TODO Full Name"
+    email: "TODO@example.com"
+    role: "ML Engineer"
+
+# ============================================================================
+# Code and reproducibility   --  TODO: set repo + sandbox URLs
+# ============================================================================
+github_repo: "https://github.com/TODO_USERNAME/redrob-ranker"
+
+sandbox_link: "https://huggingface.co/spaces/TODO_USERNAME/redrob-ranker"
+# A Streamlit app is included (app/streamlit_app.py). Deploy free on Streamlit
+# Community Cloud or HuggingFace Spaces, or provide the docker recipe below.
+
+reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./submission.csv"
+# Runs end-to-end in < 1 minute on the full 100K pool, CPU-only, no network.
+
+# ============================================================================
+# Compute environment   --  adjust 'platform' to where you ran it
+# ============================================================================
+compute:
+  platform: "Local CPU machine"
+  cpu_cores: 8
+  ram_gb: 16
+  python_version: "3.11"
+  os: "Ubuntu 22.04 LTS"
+  uses_gpu_for_inference: false          # ranking is CPU-only
+  has_network_during_ranking: false      # no API calls during ranking
+  pre_computation_required: false        # default LSA encoder needs no precompute
+  pre_computation_time_minutes: 0        # (only if you opt into --encoder st)
+
+# ============================================================================
+# AI tools declaration
+# ============================================================================
+ai_tools_used:
+  - "Claude"            # architecture discussion + code authoring assistance
+ai_usage_summary: |
+  Claude was used to help design the architecture and author/refactor the code.
+  All design decisions, scoring logic, and tuning are the team's own engineering.
+  No candidate data was sent to any hosted LLM. The ranking step uses only local
+  models (TF-IDF + SVD); optional free-tier LLMs (Ollama/Gemini/Groq) are used
+  only for offline JD-spec generation and reasoning polish, never during ranking.
+
+# ============================================================================
+# Approach summary (<=200 words)
+# ============================================================================
+methodology_summary: |
+  Hybrid funnel that ranks candidates like a recruiter, robust to the dataset's
+  four traps. Parse -> conservative honeypot/integrity filter -> cheap recall
+  prefilter (100K->shortlist) -> local semantic encoding (TF-IDF+SVD; optional
+  sentence-transformers) -> multi-dimensional scoring -> behavioral modifier ->
+  rank -> grounded reasoning. Scoring is weighted toward CAREER EVIDENCE (shipped
+  ranking/search/recsys at product companies) and SEMANTIC fit, with skills
+  trust-weighted by proficiency/endorsements/months-used/assessment so keyword
+  stuffing scores near zero. The 23 Redrob signals form an availability
+  multiplier that down-weights stale, unresponsive profiles. Explicit JD-derived
+  disqualifiers (services-only, pure research, recent-LLM-wrapper-only,
+  title-chasers, CV/speech/robotics-only) apply graduated penalties. Honeypots
+  with impossible timelines or unused "expert" skills are filtered before
+  scoring. Runs in ~28s on the full 100K pool, CPU-only, no network. LLMs are
+  used only offline (JD understanding + reasoning), never per-candidate.
+
+# ============================================================================
+# Declarations
+# ============================================================================
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true        # explicit integrity/honeypot filter implemented
+  reproduction_tested: true        # validated end-to-end on the full 100K pool
