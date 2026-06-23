@@ -65,8 +65,7 @@ with st.sidebar:
     use_sample = st.checkbox("Use bundled demo sample (150 candidates)", value=uploaded is None)
     top_n = st.slider("How many to rank", 5, 100, 25)
     st.divider()
-    st.caption("Encoder: LSA (local). The sentence-transformers encoder is "
-               "available in the CLI (`rank.py --encoder st`).")
+    
 
 raw_text = ""
 if uploaded is not None and not use_sample:
