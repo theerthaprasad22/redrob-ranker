@@ -82,6 +82,17 @@ On the full 100,000-candidate pool this runs in **well under a minute** on a
 CPU (≈28 s on an 8-core box), inside the 5-min / 16 GB / CPU-only / no-network
 budget. `candidates.jsonl.gz` is also accepted directly.
 
+> **Other input formats.** `--candidates` also accepts **CSV, TSV, Excel
+> (`.xlsx`), JSON, and plain text** — the format is auto-detected from the
+> extension and converted to the candidate schema internally (the ranking engine
+> is unchanged). Excel needs `pip install openpyxl`; the rest need nothing extra.
+> Column conventions and copy-paste templates are in
+> [`INPUT_FORMATS.md`](INPUT_FORMATS.md) (`sample_data/template_candidates.csv`,
+> `…template_candidates.xlsx`, `…template_resume.txt`). To recover the skills /
+> career dimensions from plain résumés, an optional offline LLM pre-step,
+> `parse_resumes.py`, extracts structured records before ranking (see
+> `INPUT_FORMATS.md`).
+
 ### Options
 
 ```bash

@@ -5,6 +5,12 @@ scipy>=1.10
 scikit-learn>=1.3
 PyYAML>=6.0
 
+# Excel (.xlsx) input support. Imported lazily ONLY when an Excel file is read,
+# so it never touches the core LSA ranking path; included here so the deployed
+# app (Streamlit Cloud / HF Spaces / Docker) can accept .xlsx uploads. CSV, TSV,
+# JSON/JSONL and plain-text inputs need none of this. See INPUT_FORMATS.md.
+openpyxl>=3.1
+
 # ---------------------------------------------------------------------------
 # OPTIONAL extras (NOT required to produce a submission):
 #
@@ -16,7 +22,7 @@ PyYAML>=6.0
 #   Sandbox / demo UI (app/streamlit_app.py):
 #     pip install streamlit
 #
-#   Free LLM reasoning polish (`--reasoning-llm`) needs no extra pip packages
-#   (uses the standard library); just set LLM_PROVIDER and the relevant key,
-#   or run a local Ollama server.
+#   Free LLM reasoning polish (`--reasoning-llm`) and résumé parsing
+#   (parse_resumes.py) need no extra pip packages (they use the standard
+#   library); just set LLM_PROVIDER and the relevant key, or run Ollama locally.
 # ---------------------------------------------------------------------------

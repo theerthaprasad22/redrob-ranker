@@ -1,28 +1,16 @@
 # Redrob Hackathon — Submission Metadata
 # Mirror of the portal metadata. EDIT the identity / repo / sandbox fields
-# (marked TODO) before submitting; the technical fields already describe this build.
 
-# ============================================================================
-# Team identity   --  TODO: fill in
-# ============================================================================
-team_name: "TODO-your-team-name"
-
-primary_contact:
-  name: "TODO Full Name"
-  email: "TODO@example.com"
-  phone: "+91-XXXXXXXXXX"
-
-team_members:
-  - name: "TODO Full Name"
-    email: "TODO@example.com"
-    role: "ML Engineer"
+name: "Theertha Prasad B"
+email: "theerthsprasad123@gmail.com"
+role: "AI/ML Engineer"
 
 # ============================================================================
 # Code and reproducibility   --  TODO: set repo + sandbox URLs
 # ============================================================================
-github_repo: "https://github.com/TODO_USERNAME/redrob-ranker"
+github_repo: "https://github.com/theerthaprasad22/redrob-ranker"
 
-sandbox_link: "https://huggingface.co/spaces/TODO_USERNAME/redrob-ranker"
+sandbox_link: "https://redrob-ranker-wfqiq4rsviexlezrslpepr.streamlit.app/"
 # A Streamlit app is included (app/streamlit_app.py). Deploy free on Streamlit
 # Community Cloud or HuggingFace Spaces, or provide the docker recipe below.
 

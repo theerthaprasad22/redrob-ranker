@@ -26,13 +26,15 @@ sys.path.insert(0, os.path.join(HERE, "src"))
 from redrob_ranker.llm import LLMClient, load_dotenv     # noqa: E402
 from redrob_ranker.pipeline import rank_candidates     # noqa: E402
 from redrob_ranker.role_spec import RoleSpec           # noqa: E402
-from redrob_ranker.schema import load_candidates       # noqa: E402
+from redrob_ranker.ingest import load_any              # noqa: E402
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Redrob candidate ranker")
     ap.add_argument("--candidates", required=True,
-                    help="Path to candidates.jsonl (or .jsonl.gz)")
+                    help="Path to candidate input. Accepts .jsonl/.jsonl.gz, .json, "
+                         ".csv, .tsv, .xlsx, or .txt (format auto-detected from the "
+                         "extension; see INPUT_FORMATS.md).")
     ap.add_argument("--out", default="submission.csv", help="Output CSV path")
     ap.add_argument("--role-spec", default=None,
                     help="Path to role_spec.yaml (default: config/role_spec.yaml)")
@@ -54,7 +56,7 @@ def main() -> int:
     t0 = time.time()
     if not args.quiet:
         print(f"Loading candidates from {args.candidates} ...", flush=True)
-    candidates = load_candidates(args.candidates)
+    candidates = load_any(args.candidates)
     spec = RoleSpec.load(args.role_spec)
 
     llm_client = LLMClient() if args.reasoning_llm else None

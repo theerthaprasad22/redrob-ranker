@@ -12,7 +12,6 @@ Deploy free:   Streamlit Community Cloud or HuggingFace Spaces (point at this re
 from __future__ import annotations
 
 import io
-import json
 import os
 import sys
 import time
@@ -26,6 +25,7 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 from redrob_ranker.pipeline import rank_candidates      # noqa: E402
 from redrob_ranker.role_spec import RoleSpec             # noqa: E402
 from redrob_ranker.schema import Candidate               # noqa: E402
+from redrob_ranker.ingest import load_any                # noqa: E402
 
 st.set_page_config(page_title="Redrob Candidate Ranker", page_icon="🧭", layout="wide")
 
@@ -42,42 +42,76 @@ def _load_spec():
     return RoleSpec.load(os.path.join(ROOT, "config", "role_spec.yaml"))
 
 
-def _read_candidates(raw_text: str) -> list[Candidate]:
-    cands: list[Candidate] = []
-    for line in raw_text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            cands.append(Candidate.from_dict(json.loads(line)))
-        except json.JSONDecodeError:
-            continue
-    return cands
-
-
 spec = _load_spec()
+
+# Sidebar label -> ingest fmt code (None = auto-detect / sniff).
+_FORMAT_CHOICES = {
+    "Auto-detect": None,
+    "JSON / JSONL": "json",
+    "CSV": "csv",
+    "TSV": "tsv",
+    "Excel (.xlsx)": "xlsx",
+    "Plain text / résumé": "text",
+}
 
 with st.sidebar:
     st.header("Input")
-    st.write("Upload a `.jsonl` of candidate records (one JSON object per line), "
-             "or use the bundled sample.")
-    uploaded = st.file_uploader("Candidate JSONL", type=["jsonl", "json", "txt"])
-    use_sample = st.checkbox("Use bundled demo sample (150 candidates)", value=uploaded is None)
+    st.write("Upload candidates as **JSON/JSONL, CSV, Excel (.xlsx), or plain text** "
+             "(one record per line/row/block), paste them directly. ")
+    uploaded = st.file_uploader(
+        "Candidate file",
+        type=["jsonl", "json", "txt", "md", "csv", "tsv", "xlsx", "xlsm"],
+    )
+    pasted = st.text_area(
+        "…or paste candidates here",
+        height=140,
+        placeholder='JSON array, one-JSON-object-per-line, CSV rows, or résumé text.',
+    )
+    fmt_label = st.selectbox(
+        "Format",
+        list(_FORMAT_CHOICES),
+        index=0,
+        help="Auto-detect uses the file extension (or sniffs pasted text). "
+             "Override it if a file has a missing/misleading extension, or to "
+             "tell the parser how to read pasted text. Excel can't be pasted — "
+             "upload an .xlsx file for that.",
+    )
+    fmt_code = _FORMAT_CHOICES[fmt_label]
+
+    has_manual_input = (uploaded is not None) or bool(pasted.strip())
+    use_sample = st.checkbox(
+        "Use bundled demo sample (150 candidates)", value=not has_manual_input
+    )
     top_n = st.slider("How many to rank", 5, 100, 25)
     st.divider()
-    
 
-raw_text = ""
-if uploaded is not None and not use_sample:
-    raw_text = io.TextIOWrapper(uploaded, encoding="utf-8").read()
-elif use_sample:
-    sample_path = os.path.join(ROOT, "sample_data", "demo_candidates.jsonl")
-    if os.path.exists(sample_path):
-        raw_text = open(sample_path, "r", encoding="utf-8").read()
-    else:
-        st.warning("Bundled sample not found; please upload a file.")
 
-candidates = _read_candidates(raw_text) if raw_text else []
+candidates: list[Candidate] = []
+load_error = ""
+try:
+    if not use_sample and uploaded is not None:
+        # Raw bytes + filename so binary formats (.xlsx) work; fmt overrides detection.
+        candidates = load_any(uploaded.getvalue(), filename=uploaded.name, fmt=fmt_code)
+        if pasted.strip():
+            st.info("Both a file and pasted text were provided — using the uploaded file.")
+    elif not use_sample and pasted.strip():
+        if fmt_code == "xlsx":
+            raise ValueError("Excel can't be pasted as text. Upload an .xlsx file, "
+                             "or pick a text-based format for pasted content.")
+        candidates = load_any(pasted, fmt=fmt_code)  # no filename → sniff if auto
+    elif use_sample:
+        sample_path = os.path.join(ROOT, "sample_data", "demo_candidates.jsonl")
+        if os.path.exists(sample_path):
+            candidates = load_any(sample_path)
+        else:
+            st.warning("Bundled sample not found; please upload or paste a file.")
+except ImportError as e:
+    load_error = str(e)  # e.g. .xlsx given without openpyxl installed
+except Exception as e:  # noqa: BLE001 - surface any parse error to the user
+    load_error = f"Could not parse the input: {e}"
+
+if load_error:
+    st.error(load_error)
 
 col_a, col_b = st.columns([1, 3])
 with col_a:

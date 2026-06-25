@@ -1,0 +1,27 @@
+candidate_id: CAND_0000001
+name: Asha Rao
+title: Senior Machine Learning Engineer
+company: ExampleCorp
+location: Bengaluru, Karnataka
+country: India
+years: 7.5
+
+Built and shipped large-scale recommendation and search-ranking systems serving
+millions of users at a consumer product company. Owned the full stack: retrieval,
+embeddings, ranking models, and online evaluation. Previously built a recommendation
+system from scratch at an early-stage startup. Comfortable across Python, PyTorch,
+information retrieval, and RAG.
+
+---
+
+candidate_id: CAND_0000002
+name: Vikram Mehta
+title: Marketing Manager
+company: BrandWorks
+location: Pune, Maharashtra
+country: India
+years: 8.0
+
+Drove brand campaigns and content strategy across multiple channels. Recently
+experimented with ChatGPT for copywriting and is curious about how AI tooling could
+augment marketing work, though hands-on technical AI depth is limited.
