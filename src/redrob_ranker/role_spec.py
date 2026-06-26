@@ -21,6 +21,12 @@ DEFAULT_PATH = Path(__file__).resolve().parents[2] / "config" / "role_spec.yaml"
 @dataclass
 class RoleSpec:
     data: dict[str, Any] = field(default_factory=dict)
+    # Optional natural-language anchor for semantic similarity. When a spec is
+    # built dynamically from a pasted job description (see jd_spec.py) we set
+    # this to the role's own text, so candidates are scored against THAT role
+    # rather than the hard-coded default below. Left as None for the bundled
+    # config/role_spec.yaml, which keeps its original behaviour exactly.
+    query_text_override: str | None = None
 
     # ---- raw section accessors --------------------------------------------
     @property
@@ -72,7 +78,19 @@ class RoleSpec:
         Used as the anchor for semantic similarity. Written in plain language
         (not a keyword dump) so it aligns with how strong candidates actually
         describe their work.
+
+        Resolution order:
+          1. an explicit ``query_text_override`` (set when the spec is built
+             from a pasted JD) — this is what makes ranking role-aware;
+          2. a ``query_text`` key inside the loaded data (e.g. an LLM-generated
+             spec may carry its own anchor);
+          3. the hard-coded default for the challenge's Senior-AI-Engineer role.
         """
+        if self.query_text_override and self.query_text_override.strip():
+            return self.query_text_override.strip()
+        anchor = self.data.get("query_text")
+        if isinstance(anchor, str) and anchor.strip():
+            return anchor.strip()
         return (
             "Senior AI / machine learning engineer for a product company. "
             "Has built and shipped end-to-end ranking, search, retrieval, and "

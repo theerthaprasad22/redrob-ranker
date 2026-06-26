@@ -5,6 +5,11 @@ Satisfies the challenge's sandbox requirement: accepts a small candidate sample
 (<=100), runs the full ranking pipeline end-to-end on CPU within the compute
 budget, and shows the ranked shortlist with scores and grounded reasoning.
 
+The role is no longer hard-coded: paste a job description into the "job role"
+box and candidates are ranked against *that* role. With no JD pasted, the app
+falls back to the bundled Senior-AI-Engineer spec so the demo still works
+out of the box.
+
 Run locally:   streamlit run app/streamlit_app.py
 Deploy free:   Streamlit Community Cloud or HuggingFace Spaces (point at this repo)
 """
@@ -26,23 +31,39 @@ from redrob_ranker.pipeline import rank_candidates      # noqa: E402
 from redrob_ranker.role_spec import RoleSpec             # noqa: E402
 from redrob_ranker.schema import Candidate               # noqa: E402
 from redrob_ranker.ingest import load_any                # noqa: E402
+from redrob_ranker.jd_spec import build_spec_from_jd     # noqa: E402
+from redrob_ranker.llm import LLMClient                  # noqa: E402
+from redrob_ranker.explain import explain_candidate      # noqa: E402
 
 st.set_page_config(page_title="Redrob Candidate Ranker", page_icon="🧭", layout="wide")
 
 st.title("🧭 Redrob Intelligent Candidate Ranker")
 st.caption(
-    "Ranks candidates the way a recruiter would — reading career history, "
-    "trust-weighted skills, and behavioral signals, not just keywords. "
-    "Runs fully on CPU, no network, no API keys."
+    "Paste a job role, drop in candidates, and get a ranked shortlist — scored "
+    "the way a recruiter would by reading career history, trust-weighted skills, "
+    "and behavioral signals, not just keywords. Runs on CPU, no network needed."
 )
 
 
 @st.cache_resource
-def _load_spec():
+def _load_default_spec() -> RoleSpec:
     return RoleSpec.load(os.path.join(ROOT, "config", "role_spec.yaml"))
 
 
-spec = _load_spec()
+@st.cache_resource
+def _llm_client() -> LLMClient:
+    # Cheap to build; .enabled is False unless LLM_PROVIDER etc. are configured.
+    return LLMClient()
+
+
+@st.cache_data(show_spinner=False)
+def _build_spec_cached(jd_text: str):
+    """Build a spec from the pasted JD. Cached on the JD text so we don't
+    re-run the (possibly LLM-backed) build on every Streamlit rerun."""
+    base = _load_default_spec()
+    client = _llm_client()
+    return build_spec_from_jd(jd_text, llm_client=client, base_spec=base)
+
 
 # Sidebar label -> ingest fmt code (None = auto-detect / sniff).
 _FORMAT_CHOICES = {
@@ -54,10 +75,96 @@ _FORMAT_CHOICES = {
     "Plain text / résumé": "text",
 }
 
+# ---------------------------------------------------------------------------
+# Step 1 — the job role.  This is the context everything is ranked against.
+# ---------------------------------------------------------------------------
+st.subheader("Paste the job role")
+jd_text = st.text_area(
+    "Job title + description — what are you hiring for?",
+    height=200,
+    placeholder=(
+        "e.g.\n\n"
+        "Senior Frontend Engineer\n\n"
+        "We're looking for a frontend engineer to own our React + TypeScript web app. "
+        "You'll build accessible, performant UI and work closely with design.\n\n"
+        "Must have: 5+ years with React, strong TypeScript, CSS/HTML.\n"
+        "Nice to have: Next.js, testing (Jest/Playwright), design-system experience.\n"
+        "Location: Remote (EU time zones)."
+    ),
+    help="Candidates are ranked against this role. Leave it empty to use the "
+         "bundled Senior-AI-Engineer demo role.",
+)
+
+# Build the spec from whatever is (or isn't) pasted.
+spec_result = _build_spec_cached(jd_text)
+spec = spec_result.spec
+
+# ---------------------------------------------------------------------------
+# Show what the app understood the role to be (transparency for the recruiter).
+# ---------------------------------------------------------------------------
+_METHOD_BADGE = {
+    "llm": "🤖 parsed by LLM",
+    "heuristic": "⚙️ parsed offline (no LLM)",
+    "default": "📌 bundled demo role (no JD pasted)",
+}
+with st.container():
+    if spec_result.method == "default":
+        st.info(
+            f"**No job role pasted — using the bundled demo role:** "
+            f"{spec_result.title or 'Senior AI Engineer'}. "
+            f"Paste a description above to rank against your own role."
+        )
+    else:
+        role_kind = "AI/ML role" if spec_result.is_ai_role else "general role"
+        st.success(
+            f"**Role understood:** {spec_result.title or '(untitled role)'}  "
+            f"· {_METHOD_BADGE.get(spec_result.method, spec_result.method)} · {role_kind}"
+        )
+        cc1, cc2 = st.columns(2)
+        with cc1:
+            st.markdown("**Must-have signals**")
+            if spec_result.must_haves:
+                st.write(", ".join(spec_result.must_haves))
+            else:
+                st.write("_none detected_")
+        with cc2:
+            st.markdown("**Nice-to-have signals**")
+            if spec_result.nice_to_haves:
+                st.write(", ".join(spec_result.nice_to_haves))
+            else:
+                st.write("_none detected_")
+        for note in spec_result.notes:
+            st.caption(f"ℹ️ {note}")
+
+    # Transparency: show the component weights this role resolved to. They shift
+    # by seniority (e.g. a junior role leans on skills/education over tenure).
+    _w = {k: v for k, v in (spec.weights or {}).items() if v and v > 0}
+    if _w:
+        _pretty = {
+            "semantic_fit": "Semantic fit to the role",
+            "role_title_fit": "Title / role match",
+            "career_evidence": "Relevant career evidence",
+            "skills_trust": "Trusted skills",
+            "experience_fit": "Experience (role-relevant)",
+            "domain_fit": "Domain match",
+            "location_fit": "Location",
+            "education_fit": "Education",
+        }
+        with st.expander("How this role is weighted"):
+            st.caption("Experience is scored on role-relevant years, so time in an "
+                       "unrelated field counts only partially and strong freshers "
+                       "aren't penalised on entry-level roles.")
+            st.write({_pretty.get(k, k): round(v, 3)
+                      for k, v in sorted(_w.items(), key=lambda kv: kv[1], reverse=True)})
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# Step 2 — candidates.  Kept in the sidebar so the role stays front-and-centre.
+# ---------------------------------------------------------------------------
 with st.sidebar:
-    st.header("Input")
     st.write("Upload candidates as **JSON/JSONL, CSV, Excel (.xlsx), or plain text** "
-             "(one record per line/row/block), paste them directly. ")
+             "(one record per line/row/block), or paste them directly.")
     uploaded = st.file_uploader(
         "Candidate file",
         type=["jsonl", "json", "txt", "md", "csv", "tsv", "xlsx", "xlsm"],
@@ -65,7 +172,7 @@ with st.sidebar:
     pasted = st.text_area(
         "…or paste candidates here",
         height=140,
-        placeholder='JSON array, one-JSON-object-per-line, CSV rows, or résumé text.',
+        placeholder='JSON array, one-JSON-object-per-line, CSV rows, or resume text.',
     )
     fmt_label = st.selectbox(
         "Format",
@@ -113,6 +220,7 @@ except Exception as e:  # noqa: BLE001 - surface any parse error to the user
 if load_error:
     st.error(load_error)
 
+st.subheader("Rank")
 col_a, col_b = st.columns([1, 3])
 with col_a:
     st.metric("Candidates loaded", len(candidates))
@@ -129,23 +237,46 @@ if run and candidates:
         rows = rank_candidates(candidates, spec, shortlist_k=max(200, len(candidates)),
                                n_results=min(top_n, len(candidates)))
     elapsed = time.time() - t0
-    st.success(f"Ranked {len(rows)} candidates in {elapsed:.2f}s on CPU.")
+    ranked_for = spec_result.title or "the role"
+    st.success(f"Ranked {len(rows)} candidates for **{ranked_for}** in {elapsed:.2f}s on CPU.")
 
     by_id = {c.candidate_id: c for c in candidates}
+    # Per-row trust layer (computed only for the displayed shortlist).
+    explanations = {
+        r.candidate_id: explain_candidate(by_id[r.candidate_id], spec, r.breakdown)
+        for r in rows if by_id.get(r.candidate_id)
+    }
     table = []
     for r in rows:
         c = by_id.get(r.candidate_id)
         p = c.raw.get("profile", {}) if c else {}
+        ex = explanations.get(r.candidate_id)
         table.append({
             "rank": r.rank,
             "score": round(r.score, 4),
             "candidate_id": r.candidate_id,
             "current_title": p.get("current_title", ""),
             "years": p.get("years_of_experience", ""),
+            "confidence": ex.confidence if ex else "",
+            "missing must-haves": ", ".join(ex.missing) if ex else "",
             "location": p.get("location", ""),
             "reasoning": r.reasoning,
         })
     st.dataframe(table, use_container_width=True, hide_index=True)
+    st.caption("‘Confidence’ reflects how complete and consistent a profile is — "
+               "treat low-confidence rows as needing a closer look, not as ranked facts.")
+
+    # Recruiter-readable summary of the very top picks.
+    top_for_summary = rows[: min(3, len(rows))]
+    if top_for_summary:
+        with st.expander("Recruiter view — top picks at a glance", expanded=True):
+            for r in top_for_summary:
+                ex = explanations.get(r.candidate_id)
+                if not ex:
+                    continue
+                st.markdown(f"**#{r.rank} · {r.candidate_id}** — {ex.narrative}")
+                if ex.confidence_reason:
+                    st.caption(f"Confidence: {ex.confidence} — {ex.confidence_reason}")
 
     # detail expander for the top pick
     if rows and rows[0].breakdown is not None:

@@ -222,6 +222,19 @@ streamlit run app/streamlit_app.py
 Upload a small `.jsonl` (or use the bundled sample), and it returns the ranked
 top candidates with scores and reasoning, well within the compute budget.
 
+**Ranking adapts to the role.** The understood role reshapes how candidates are
+scored, not just what they're matched against. Component weights shift by
+seniority — an entry-level role leans on demonstrated skills and education rather
+than tenure, a senior role leans on relevant experience and track record.
+Experience itself is measured in *role-relevant* years: time spent in an
+unrelated field counts only partially, so a genuine fit isn't outranked by raw
+tenure, and a strong fresher isn't penalised on roles that don't demand
+seniority. Alongside each shortlisted candidate the app shows a confidence level
+(how complete and consistent the profile is), the must-have signals they do and
+don't evidence, and a short plain-language summary — so a recruiter can see *why*
+to trust a result. None of this affects the bundled default role: that spec
+carries no role policy and ranks byte-for-byte as before.
+
 **Deploying for free:** see [`DEPLOY.md`](DEPLOY.md) for exact click-by-click steps. In short:
 - **Streamlit Community Cloud** — point it at this repo and `app/streamlit_app.py`.
 - **Hugging Face Spaces** — create a Streamlit Space with this repo.

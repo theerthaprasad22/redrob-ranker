@@ -34,9 +34,40 @@ def _any(text: str, terms: list[str]) -> bool:
 # ---------------------------------------------------------------------------
 # Title scoring
 # ---------------------------------------------------------------------------
+_GENERIC_PROF_NOUNS = (
+    "engineer", "developer", "scientist", "manager", "designer", "analyst",
+    "architect", "specialist", "consultant", "researcher", "administrator",
+    "programmer", "marketer", "accountant", "recruiter",
+)
+
+
 def _title_score(title: str, spec: RoleSpec) -> float:
     t = title.lower()
     ce = spec.career_evidence
+    targets = ce.get("target_title_terms", [])
+
+    # ---- Dynamic, role-aware path (spec built from a pasted JD) -------------
+    # The bundled AI spec has no target_title_terms, so it never enters here and
+    # keeps the exact ladder below. When targets ARE present we score by how
+    # well the candidate's title matches THIS role's title, not a fixed AI list.
+    if targets:
+        role_noun = str(ce.get("role_noun", "")).strip()
+        offrole = ce.get("offrole_titles", [])
+        if _any(t, targets):
+            base = 1.0                      # exactly the role we're hiring for
+        elif role_noun and role_noun in t:
+            base = 0.5                       # same family, different specialty
+        elif any(n in t for n in _GENERIC_PROF_NOUNS):
+            base = 0.32                      # a real professional role, off-target
+        else:
+            base = 0.22
+        # off-role stuffer signal (only populated for AI roles): a Marketing/Sales
+        # title with AI skills should not ride in on a generic-noun match.
+        if base < 1.0 and _any(t, offrole):
+            base = 0.1
+        return base
+
+    # ---- Original bundled-AI-spec ladder (unchanged) -----------------------
     # Off-role titles (the keyword-stuffer signature) crush the score even if
     # the skills list is full of AI terms.
     if _any(t, ce.get("offrole_titles", [])):
@@ -73,10 +104,20 @@ def role_title_fit(c: Candidate, spec: RoleSpec) -> float:
 # Career evidence (shipped ranking/search/recsys at a product company)
 # ---------------------------------------------------------------------------
 def _relevant_nouns(spec: RoleSpec) -> list[str]:
+    """The 'what did they actually build' nouns used for career-evidence and
+    the cheap prefilter.
+
+    For the bundled AI-engineer spec these are the ranking/retrieval/vector-db
+    concepts (unchanged). For a spec built from an arbitrary pasted JD, those
+    named keys won't exist, so we fall back to *all* must-have terms — i.e. the
+    things this particular role says it needs — keeping the signal role-aware.
+    """
     out: list[str] = []
     for key in ("ranking_search_recsys", "embeddings_retrieval", "vector_db_hybrid_search"):
         out.extend(spec.must_have.get(key, {}).get("terms", []))
-    return out
+    if out:
+        return out
+    return spec.all_must_have_terms()
 
 
 def career_evidence_fit(c: Candidate, spec: RoleSpec) -> tuple[float, bool]:
@@ -195,9 +236,10 @@ def skills_trust_fit(c: Candidate, spec: RoleSpec) -> tuple[float, list[str]]:
 # ---------------------------------------------------------------------------
 # Experience fit
 # ---------------------------------------------------------------------------
-def experience_fit(c: Candidate, spec: RoleSpec) -> float:
-    e = spec.experience
-    y = c.years_of_experience
+def _band_score(y: float, e: dict[str, Any]) -> float:
+    """Score a number of years against the role's experience band. This is the
+    original experience curve, unchanged, so a spec without an experience
+    `policy` (e.g. the bundled config) behaves exactly as before."""
     lo, hi = e["ideal_low"], e["ideal_high"]
     mn, mx = e["min_years"], e["max_years"]
     fl, ce = e["soft_floor"], e["soft_ceiling"]
@@ -212,6 +254,69 @@ def experience_fit(c: Candidate, spec: RoleSpec) -> float:
     if mx < y <= ce:
         return 0.45 + 0.40 * (ce - y) / max(1e-9, (ce - mx))
     return 0.20
+
+
+def _relevant_years(c: Candidate, spec: RoleSpec) -> float:
+    """How many of the candidate's years were spent in *role-relevant* work.
+
+    A career entry counts as relevant if its title matches the role's family
+    (the role's own title terms or its profession noun) or its description shows
+    the things this role actually needs (the must-have terms). We sum the
+    duration of those entries; if durations are missing we prorate the
+    candidate's total years by the share of relevant entries.
+    """
+    ce = spec.career_evidence
+    target_terms = [t for t in ce.get("target_title_terms", []) if t]
+    role_noun = ce.get("role_noun", "")
+    nouns = _relevant_nouns(spec)
+
+    total_entries = 0
+    rel_entries = 0
+    rel_months = 0.0
+    for r in c.career_history:
+        if not isinstance(r, dict):
+            continue
+        total_entries += 1
+        t = str(r.get("title", "")).lower()
+        d = str(r.get("description", "")).lower()
+        dur = float(r.get("duration_months", 0) or 0)
+        title_match = any(term in t for term in target_terms) or bool(role_noun and role_noun in t)
+        desc_match = _any(d, nouns) or _any(t, nouns)
+        if title_match or desc_match:
+            rel_entries += 1
+            rel_months += dur
+
+    if total_entries == 0:
+        return 0.0
+    if rel_months > 0:
+        return rel_months / 12.0
+    if rel_entries > 0:
+        raw = float(c.years_of_experience or 0.0)
+        return raw * (rel_entries / total_entries)
+    return 0.0
+
+
+def experience_fit(c: Candidate, spec: RoleSpec) -> float:
+    e = spec.experience
+    policy = e.get("policy") or {}
+    if not policy:
+        # No policy => bundled/default spec: keep the original raw-years curve.
+        return _band_score(c.years_of_experience, e)
+
+    # Role-aware path (specs built from a pasted JD).
+    raw = float(c.years_of_experience or 0.0)
+    rel_years = _relevant_years(c, spec)
+    # Count relevant tenure in full; give partial credit for the rest as
+    # transferable, so years in an unrelated field don't read as a full fit.
+    eff = 0.8 * rel_years + 0.2 * raw
+    score = _band_score(eff, e)
+
+    # Fresher fairness: for entry-level or experience-agnostic roles, being under
+    # the band is not disqualifying — let skills, education and projects carry a
+    # strong fresher instead of zeroing them on tenure alone.
+    if policy.get("fresher_friendly") and eff < e.get("min_years", 0):
+        score = max(score, 0.7)
+    return round(score, 4)
 
 
 # ---------------------------------------------------------------------------
