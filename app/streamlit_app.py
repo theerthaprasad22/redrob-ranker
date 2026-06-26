@@ -84,12 +84,9 @@ jd_text = st.text_area(
     height=200,
     placeholder=(
         "e.g.\n\n"
-        "Senior Frontend Engineer\n\n"
-        "We're looking for a frontend engineer to own our React + TypeScript web app. "
+        "AI/ML Engineer\n\n"
+        "We're looking for a AI/ML engineer to work with LLMs. "
         "You'll build accessible, performant UI and work closely with design.\n\n"
-        "Must have: 5+ years with React, strong TypeScript, CSS/HTML.\n"
-        "Nice to have: Next.js, testing (Jest/Playwright), design-system experience.\n"
-        "Location: Remote (EU time zones)."
     ),
     help="Candidates are ranked against this role. Leave it empty to use the "
          "bundled Senior-AI-Engineer demo role.",
